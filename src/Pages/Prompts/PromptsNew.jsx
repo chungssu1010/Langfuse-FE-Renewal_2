@@ -1,3 +1,4 @@
+// PromptsNew.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import styles from './PromptsNew.module.css';
@@ -74,7 +75,7 @@ const PromptsNew = () => {
         }
     };
 
-    
+
     const handleSave = async () => {
         try {
             await createPromptOrVersion({
@@ -98,21 +99,21 @@ const PromptsNew = () => {
             }
         }
     };
-    
+
     const breadcrumbs = (
         <>
-          <Book size={16} />
-          <Link to="/prompts">Prompts</Link>
-          <span>/</span>
-           {isNewVersionMode ? (
-            <>
-              <Link to={`/prompts/${promptName}`}>{promptName}</Link>
-              <span>/</span>
-              <span className="active">New Version</span>
-            </>
-          ) : (
-            <span className="active">New prompt</span>
-          )}
+            <Book size={16} />
+            <Link to="/prompts">Prompts</Link>
+            <span>/</span>
+            {isNewVersionMode ? (
+                <>
+                    <Link to={`/prompts/${promptName}`}>{promptName}</Link>
+                    <span>/</span>
+                    <span className="active">New Version</span>
+                </>
+            ) : (
+                <span className="active">New prompt</span>
+            )}
         </>
     );
 
@@ -128,31 +129,31 @@ const PromptsNew = () => {
                 label="Name"
                 subLabel="Unique identifier for this prompt."
             >
-                <input 
-                  id="prompt-name" 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="e.g. summarize-short-text" 
-                  value={promptName} 
-                  onChange={(e) => setPromptName(e.target.value)} 
-                  disabled={isNewVersionMode}
+                <input
+                    id="prompt-name"
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. summarize-short-text"
+                    value={promptName}
+                    onChange={(e) => setPromptName(e.target.value)}
+                    disabled={isNewVersionMode}
                 />
             </FormGroup>
-            
+
             <FormGroup
                 htmlFor="prompt-content"
                 label="Prompt"
                 subLabel="Define your prompt template."
             >
-                 <div className={styles.promptHeader}>
+                <div className={styles.promptHeader}>
                     <div className={styles.typeSelector}>
                         <button className={`${styles.typeButton} ${promptType === 'Chat' ? styles.active : ''}`} onClick={() => setPromptType('Chat')}>Chat</button>
                         <button className={`${styles.typeButton} ${promptType === 'Text' ? styles.active : ''}`} onClick={() => setPromptType('Text')}>Text</button>
                     </div>
                     {/* This button was misplaced in the original code. It should be outside the textarea. */}
-                     <button className={styles.addReferenceButton} onClick={() => setIsReferenceModalOpen(true)}>
-                         + Add prompt reference
-                     </button>
+                    <button className={styles.addReferenceButton} onClick={() => setIsReferenceModalOpen(true)}>
+                        + Add prompt reference
+                    </button>
                 </div>
                 {promptType === 'Text' ? (
                     <ForwardedLineNumberedTextarea
@@ -164,7 +165,12 @@ const PromptsNew = () => {
                         ref={textPromptRef} // Pass ref here
                     />
                 ) : (
-                    <ChatBox messages={chatContent} setMessages={setChatContent} />
+                    <ChatBox //프롬프트팀
+                        value={chatContent}
+                        onChange={setChatContent}
+                        schema="rolePlaceholder"
+                        autoInit={true}
+                    />
                 )}
                 {variables.length > 0 && (
                     <div className={styles.variablesContainer}>
