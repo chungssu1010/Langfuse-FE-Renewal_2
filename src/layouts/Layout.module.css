@@ -217,7 +217,5 @@
   height: 100vh;
   overflow-y: auto;
   background-color: #020817;
-  /* ▼▼▼ 아래 두 줄을 추가합니다. ▼▼▼ */
-  position: relative;
-  z-index: 1;
+  /* padding: 24px; */
 }
