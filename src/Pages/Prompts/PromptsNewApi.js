@@ -1,8 +1,6 @@
 import axios from 'axios';
-// import useProjectId from 'hooks/useProjectId';
 
-// const PROJECT_ID = useProjectId();
-const PROJECT_ID = "cmetj3c160006qp07r33bizpj";
+const PROJECT_ID = "cmetj3c160006qp07r33bizpj"
 /**
  * [tRPC] 새로운 프롬프트를 생성하거나 새 버전을 만듭니다.
  */
@@ -36,7 +34,8 @@ export const createPromptOrVersion = async (params) => {
             .map(({ role, content }) => ({ role: role.toLowerCase(), content: content || '' })),
       config: JSON.parse(config),
       labels: activeLabels,
-      commitMessage: commitMessage || null,
+      // commitMessage가 비어있으면 '' 대신 null을 보내 데이터 불일치 문제를 해결합니다.
+      commitMessage: commitMessage ? commitMessage : null,
     },
     meta: {
       values: {
