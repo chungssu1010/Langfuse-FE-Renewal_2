@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+// PromptsDetail.jsx
+//수정 코드
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import styles from './PromptsDetail.module.css';
 import {
@@ -15,7 +17,8 @@ import {
   Tag,
 } from 'lucide-react';
 import DuplicatePromptModal from './DuplicatePromptModal.jsx';
-import { fetchPromptVersions, createNewPromptVersion } from './PromptsDetailApi.js';
+import { fetchPromptVersions } from './PromptsDetailApi.js';
+import NewExperimentModal from './NewExperimentModal'; // NewExperimentModal import
 
 // --- 메인 컴포넌트 ---
 export default function PromptsDetail() {
@@ -29,6 +32,11 @@ export default function PromptsDetail() {
   const [activeDetailTab, setActiveDetailTab] = useState('Prompt');
   const [allPromptNames, setAllPromptNames] = useState([]);
   const [isDuplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [isPlaygroundMenuOpen, setPlaygroundMenuOpen] = useState(false);
+  const playgroundMenuRef = useRef(null);
+
+  // Experiment 모달의 열림/닫힘 상태를 관리
+  const [isExperimentModalOpen, setExperimentModalOpen] = useState(false);
 
   const loadPromptData = useCallback(async () => {
     if (!id) return;
@@ -38,7 +46,7 @@ export default function PromptsDetail() {
       const fetchedVersions = await fetchPromptVersions(id);
       setVersions(fetchedVersions);
       if (fetchedVersions.length > 0) {
-        setSelectedVersion(fetchedVersions[0]); // 최신 버전을 기본으로 선택
+        setSelectedVersion(fetchedVersions[0]);
       }
     } catch (err) {
       console.error("Failed to fetch prompt details:", err);
@@ -51,6 +59,18 @@ export default function PromptsDetail() {
   useEffect(() => {
     loadPromptData();
   }, [loadPromptData]);
+  
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (playgroundMenuRef.current && !playgroundMenuRef.current.contains(event.target)) {
+        setPlaygroundMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleNewVersion = () => {
     if (!id || !selectedVersion) return;
@@ -70,6 +90,27 @@ export default function PromptsDetail() {
         isNewVersion: true,
         version: selectedVersion.id
       },
+    });
+  };
+  
+  const handleGoToPlayground = () => {
+    if (!selectedVersion) return;
+
+    const messages = [];
+    if (selectedVersion.prompt.system) {
+      messages.push({ id: Date.now() + 1, role: 'System', content: selectedVersion.prompt.system });
+    }
+    if (selectedVersion.prompt.user) {
+      messages.push({ id: Date.now() + 2, role: 'User', content: selectedVersion.prompt.user });
+    }
+
+    navigate('/playground', {
+      state: {
+        promptName: id,
+        promptVersion: selectedVersion.id,
+        messages: messages,
+        config: selectedVersion.config,
+      }
     });
   };
 
@@ -110,6 +151,13 @@ export default function PromptsDetail() {
     });
     alert(`Prompt duplicated as "${newName}" (자세한 내용은 콘솔 확인)`);
     setDuplicateModalOpen(false);
+  };
+  
+  // Experiment 모달에서 'Create' 버튼을 눌렀을 때 실행될 함수
+  const handleRunExperiment = () => {
+    console.log("Create Experiment button clicked. Form data is in the modal.");
+    alert('실험 생성 요청이 콘솔에 기록되었습니다.');
+    setExperimentModalOpen(false);
   };
 
   if (isLoading) {
@@ -210,8 +258,31 @@ export default function PromptsDetail() {
               <button className={`${styles.detailTabButton} ${activeDetailTab === 'Use' ? styles.active : ''}`} onClick={() => setActiveDetailTab('Use')}>Use Prompt</button>
             </div>
             <div className={styles.detailActions}>
-              <button className={styles.playgroundButton}><Play size={14} /> Playground</button>
-              <button className={styles.playgroundButton}>Experiment</button>
+              <div className={styles.playgroundDropdownContainer} ref={playgroundMenuRef}>
+                <button 
+                  className={styles.playgroundButton} 
+                  onClick={() => setPlaygroundMenuOpen(prev => !prev)}
+                >
+                  <Play size={14} /> Playground
+                </button>
+
+                {isPlaygroundMenuOpen && (
+                  <div className={styles.playgroundDropdownMenu}>
+                    <div className={styles.playgroundDropdownItem} onClick={handleGoToPlayground}>
+                      Fresh playground
+                    </div>
+                    <div className={styles.playgroundDropdownItem} onClick={() => alert('Add to existing 기능은 아직 구현되지 않았습니다.')}>
+                      Add to existing
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button 
+                className={styles.playgroundButton}
+                onClick={() => setExperimentModalOpen(true)}
+              >
+                Dataset run
+              </button>
               <button className={styles.iconButton}><MessageCircle size={16} /></button>
               <button className={styles.iconButton}><MoreVertical size={18} /></button>
             </div>
@@ -274,6 +345,17 @@ export default function PromptsDetail() {
           currentVersion={selectedVersion?.id || 0}
         />
       )}
+      {isExperimentModalOpen && (
+        <NewExperimentModal
+            isOpen={isExperimentModalOpen}
+            onClose={() => setExperimentModalOpen(false)}
+            onSubmit={handleRunExperiment}
+            promptName={id}
+            promptVersion={selectedVersion?.id}
+        />
+      )}
     </div>
   );
 }
+
+
