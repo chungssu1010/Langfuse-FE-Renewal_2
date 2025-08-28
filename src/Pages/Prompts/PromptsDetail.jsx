@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import styles from './PromptsDetail.module.css';
+import SearchInput from '../../components/SearchInput/SearchInput.jsx';
 import {
   Book,
   Clipboard,
@@ -35,8 +36,35 @@ export default function PromptsDetail() {
   const [isPlaygroundMenuOpen, setPlaygroundMenuOpen] = useState(false);
   const playgroundMenuRef = useRef(null);
 
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Experiment 모달의 열림/닫힘 상태를 관리
   const [isExperimentModalOpen, setExperimentModalOpen] = useState(false);
+
+  const filteredVersions = useMemo(() => {
+    const searchId = parseInt(searchQuery);
+
+    if (searchQuery && !isNaN(searchId)) {
+      return versions.filter(version => version.id === searchId);
+    }
+
+    if (!searchQuery) {
+      return versions;
+    }
+
+    const query = searchQuery.toLowerCase();
+    // 아래 switch 문을 제거하고 이 로직만 남겨야 합니다.
+    return versions.filter(version => {
+      return (
+        version.labels.some(label => label.toLowerCase().includes(query)) ||
+        version.tags.some(tag => tag.toLowerCase().includes(query)) ||
+        version.details.toLowerCase().includes(query) ||
+        version.author.toLowerCase().includes(query)
+      );
+    });
+  }, [versions, searchQuery]);
+
+
 
   const loadPromptData = useCallback(async () => {
     if (!id) return;
@@ -59,7 +87,7 @@ export default function PromptsDetail() {
   useEffect(() => {
     loadPromptData();
   }, [loadPromptData]);
-  
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (playgroundMenuRef.current && !playgroundMenuRef.current.contains(event.target)) {
@@ -81,9 +109,9 @@ export default function PromptsDetail() {
         promptType: selectedVersion.prompt.system ? 'Chat' : 'Text',
         chatContent: selectedVersion.prompt.system
           ? [
-              { id: 1, role: 'System', content: selectedVersion.prompt.system },
-              { id: 2, role: 'User', content: selectedVersion.prompt.user },
-            ]
+            { id: 1, role: 'System', content: selectedVersion.prompt.system },
+            { id: 2, role: 'User', content: selectedVersion.prompt.user },
+          ]
           : [{ id: 1, role: 'System', content: 'You are a helpful assistant.' }],
         textContent: selectedVersion.prompt.system ? '' : selectedVersion.prompt.user,
         config: JSON.stringify(selectedVersion.config, null, 2),
@@ -92,7 +120,7 @@ export default function PromptsDetail() {
       },
     });
   };
-  
+
   const handleGoToPlayground = () => {
     if (!selectedVersion) return;
 
@@ -152,7 +180,7 @@ export default function PromptsDetail() {
     alert(`Prompt duplicated as "${newName}" (자세한 내용은 콘솔 확인)`);
     setDuplicateModalOpen(false);
   };
-  
+
   // Experiment 모달에서 'Create' 버튼을 눌렀을 때 실행될 함수
   const handleRunExperiment = () => {
     console.log("Create Experiment button clicked. Form data is in the modal.");
@@ -168,12 +196,12 @@ export default function PromptsDetail() {
     return (
       <div className={styles.container}>
         <div className={styles.header}>
-            <div className={styles.breadcrumbs}>
-                <Book size={16} />
-                <Link to="/prompts" style={{ color: '#94a3b8', textDecoration: 'none' }}>Prompts</Link>
-                <span>/</span>
-                <span className={styles.promptName}>{id}</span>
-            </div>
+          <div className={styles.breadcrumbs}>
+            <Book size={16} />
+            <Link to="/prompts" style={{ color: '#94a3b8', textDecoration: 'none' }}>Prompts</Link>
+            <span>/</span>
+            <span className={styles.promptName}>{id}</span>
+          </div>
         </div>
         <div className={styles.placeholder}>⚠️ {error || "프롬프트 데이터를 찾을 수 없습니다."}</div>
       </div>
@@ -189,7 +217,7 @@ export default function PromptsDetail() {
           </h1>
           <div className={styles.versionDropdown}>
             {selectedVersion.tags.map(tag => (
-              <span key={tag} className={styles.tagItem}><Tag size={12}/> {tag}</span>
+              <span key={tag} className={styles.tagItem}><Tag size={12} /> {tag}</span>
             ))}
           </div>
         </div>
@@ -197,19 +225,18 @@ export default function PromptsDetail() {
           <button className={styles.actionButton} onClick={() => setDuplicateModalOpen(true)}>
             <Clipboard size={14} /> Duplicate</button>
           <div className={styles.navButtons}>
-             <button className={styles.navButton} onClick={handlePrev} disabled={currentPromptIndex <= 0}>
-                <ChevronLeft size={16}/>
-             </button>
-             <button className={styles.navButton} onClick={handleNext} disabled={currentPromptIndex === -1 || currentPromptIndex >= allPromptNames.length - 1}>
-                <ChevronRight size={16}/>
-             </button>
+            <button className={styles.navButton} onClick={handlePrev} disabled={currentPromptIndex <= 0}>
+              <ChevronLeft size={16} />
+            </button>
+            <button className={styles.navButton} onClick={handleNext} disabled={currentPromptIndex === -1 || currentPromptIndex >= allPromptNames.length - 1}>
+              <ChevronRight size={16} />
+            </button>
           </div>
         </div>
       </div>
 
       <div className={styles.tabs}>
         <button className={`${styles.tabButton} ${styles.active}`}>Versions</button>
-        <button className={styles.tabButton}>Metrics</button>
       </div>
 
       <div className={styles.mainGrid}>
@@ -217,14 +244,19 @@ export default function PromptsDetail() {
           <div className={styles.versionToolbar}>
             <div className={styles.searchBox}>
               <Search size={14} className={styles.searchIcon} />
-              <input type="text" placeholder="Search versions" />
+              <input
+                type="text"
+                placeholder="Search versions"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
             <button className={styles.newButton} onClick={handleNewVersion}>
               <Plus size={16} /> New Version
             </button>
           </div>
           <ul className={styles.versionList}>
-            {versions.map(version => (
+            {filteredVersions.map(version => (
               <li
                 key={version.id}
                 className={`${styles.versionItem} ${selectedVersion?.id === version.id ? styles.selected : ''}`}
@@ -235,14 +267,14 @@ export default function PromptsDetail() {
                 </div>
                 <div className={styles.tagsContainer}>
                   {version.labels.map(label => (
-                      <span key={label} className={label.toLowerCase() === 'production' ? styles.statusTagProd : styles.statusTagLatest}>
-                          <GitCommitHorizontal size={12}/>{label}
-                      </span>
+                    <span key={label} className={label.toLowerCase() === 'production' ? styles.statusTagProd : styles.statusTagLatest}>
+                      <GitCommitHorizontal size={12} />{label}
+                    </span>
                   ))}
                 </div>
                 <div className={styles.versionMeta}>
-                    <p>{version.details}</p>
-                    <p>by {version.author}</p>
+                  <p>{version.details}</p>
+                  <p>by {version.author}</p>
                 </div>
               </li>
             ))}
@@ -259,8 +291,8 @@ export default function PromptsDetail() {
             </div>
             <div className={styles.detailActions}>
               <div className={styles.playgroundDropdownContainer} ref={playgroundMenuRef}>
-                <button 
-                  className={styles.playgroundButton} 
+                <button
+                  className={styles.playgroundButton}
                   onClick={() => setPlaygroundMenuOpen(prev => !prev)}
                 >
                   <Play size={14} /> Playground
@@ -277,7 +309,7 @@ export default function PromptsDetail() {
                   </div>
                 )}
               </div>
-              <button 
+              <button
                 className={styles.playgroundButton}
                 onClick={() => setExperimentModalOpen(true)}
               >
@@ -290,26 +322,26 @@ export default function PromptsDetail() {
 
           <div className={styles.promptArea}>
             {activeDetailTab === 'Prompt' && (
-                <>
-                    {selectedVersion.prompt.system && (
-                        <div className={styles.promptCard}>
-                            <div className={styles.promptHeader}>System Prompt</div>
-                            <div className={styles.promptBody}><pre>{selectedVersion.prompt.system}</pre></div>
-                        </div>
-                    )}
-                    <div className={styles.promptCard}>
-                        <div className={styles.promptHeader}>Text Prompt</div>
-                        <div className={styles.promptBody}><pre>{selectedVersion.prompt.user}</pre></div>
+              <>
+                {selectedVersion.prompt.system && (
+                  <div className={styles.promptCard}>
+                    <div className={styles.promptHeader}>System Prompt</div>
+                    <div className={styles.promptBody}><pre>{selectedVersion.prompt.system}</pre></div>
+                  </div>
+                )}
+                <div className={styles.promptCard}>
+                  <div className={styles.promptHeader}>Text Prompt</div>
+                  <div className={styles.promptBody}><pre>{selectedVersion.prompt.user}</pre></div>
+                </div>
+                {variables.length > 0 && (
+                  <div className={styles.variablesInfo}>
+                    The following variables are available:
+                    <div className={styles.variablesContainer}>
+                      {variables.map(v => <span key={v} className={styles.variableTag}>{v}</span>)}
                     </div>
-                     {variables.length > 0 && (
-                        <div className={styles.variablesInfo}>
-                            The following variables are available:
-                            <div className={styles.variablesContainer}>
-                                {variables.map(v => <span key={v} className={styles.variableTag}>{v}</span>)}
-                            </div>
-                        </div>
-                    )}
-                </>
+                  </div>
+                )}
+              </>
             )}
 
             {activeDetailTab === 'Config' && (
@@ -318,16 +350,16 @@ export default function PromptsDetail() {
                 <div className={styles.promptBody}><pre>{JSON.stringify(selectedVersion.config ?? {}, null, 2)}</pre></div>
               </div>
             )}
-             
+
             {activeDetailTab === 'Use' && (
               <>
                 <div className={styles.promptCard}>
-                    <div className={styles.promptHeader}>Python</div>
-                    <div className={styles.promptBody}><pre>{selectedVersion.useprompts.python}</pre></div>
+                  <div className={styles.promptHeader}>Python</div>
+                  <div className={styles.promptBody}><pre>{selectedVersion.useprompts.python}</pre></div>
                 </div>
                 <div className={styles.promptCard}>
-                    <div className={styles.promptHeader}>JS/TS</div>
-                    <div className={styles.promptBody}><pre>{selectedVersion.useprompts.jsTs}</pre></div>
+                  <div className={styles.promptHeader}>JS/TS</div>
+                  <div className={styles.promptBody}><pre>{selectedVersion.useprompts.jsTs}</pre></div>
                 </div>
               </>
             )}
@@ -347,11 +379,11 @@ export default function PromptsDetail() {
       )}
       {isExperimentModalOpen && (
         <NewExperimentModal
-            isOpen={isExperimentModalOpen}
-            onClose={() => setExperimentModalOpen(false)}
-            onSubmit={handleRunExperiment}
-            promptName={id}
-            promptVersion={selectedVersion?.id}
+          isOpen={isExperimentModalOpen}
+          onClose={() => setExperimentModalOpen(false)}
+          onSubmit={handleRunExperiment}
+          promptName={id}
+          promptVersion={selectedVersion?.id}
         />
       )}
     </div>
