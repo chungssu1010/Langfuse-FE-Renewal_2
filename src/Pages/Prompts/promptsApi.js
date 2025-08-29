@@ -1,18 +1,20 @@
-import axios from 'axios';
-import { langfuse } from 'lib/langfuse';
-// import useProjectId from 'hooks/useProjectId';
+// src/api/promptsApi.js
 
-// const PROJECT_ID = useProjectId();
-const PROJECT_ID = "cmetj3c160006qp07r33bizpj";
+import axios from 'axios';
+// import { langfuse } from 'lib/langfuse'; // langfuse 관련 코드가 없으므로 주석 처리 또는 제거
 
 /**
  * [tRPC] 프롬프트 목록 전체를 가져옵니다.
+ * @param {string} projectId - 프로젝트 ID를 인자로 받습니다.
  */
-export const fetchPrompts = async () => {
+export const fetchPrompts = async (projectId) => { // [수정] projectId를 인자로 받도록 변경
+  // [수정] projectId가 없으면 API를 호출하지 않고 빈 배열을 반환하여 에러 방지
+  if (!projectId) return [];
+
   try {
     const params = {
       json: {
-        projectId: PROJECT_ID,
+        projectId: projectId, // [수정] 인자로 받은 projectId 사용
         page: 0,
         limit: 50,
         filter: [],
@@ -44,24 +46,21 @@ export const fetchPrompts = async () => {
     throw new Error(error.response?.data?.error?.message || "Failed to fetch prompts.");
   }
 };
-// ========================= 추가 ===============================
+
 /**
  * 인라인 참조에 사용할 수 있는 텍스트 프롬프트 목록을 가져옵니다.
+ * @param {string} projectId - 프로젝트 ID를 인자로 받습니다.
  * @returns {Promise<Array<{id: string, name: string}>>}
  */
-export const fetchPromptLinkOptions = async () => {
-  try {
-    // TODO: 현재 프로젝트 ID를 동적으로 가져와야 합니다.
-    // 우선 제공해주신 네트워크 로그에 있는 ID를 임시로 사용합니다.
-    const projectId = PROJECT_ID;
+export const fetchPromptLinkOptions = async (projectId) => { // [수정] projectId를 인자로 받도록 변경
+  if (!projectId) return [];
 
+  try {
     const input = {
-      json: { projectId },
+      json: { projectId }, // [수정] 인자로 받은 projectId 사용
     };
 
     const url = `/api/trpc/prompts.getPromptLinkOptions?input=${encodeURIComponent(JSON.stringify(input))}`;
-
-    // 'credentials: "include"' 옵션을 추가하여 인증 쿠키를 함께 전송합니다.
     const response = await fetch(url, {
       credentials: 'include',
     });
@@ -71,7 +70,6 @@ export const fetchPromptLinkOptions = async () => {
     }
 
     const data = await response.json();
-
     const prompts = data.result?.data?.json;
 
     if (!Array.isArray(prompts)) {
@@ -80,10 +78,6 @@ export const fetchPromptLinkOptions = async () => {
     }
 
     return prompts;
-    // return prompts.map(prompt => ({
-    //   id: prompt.name,
-    //   name: prompt.name,
-    // }));
 
   } catch (error) {
     console.error("Failed to fetch prompt link options:", error);
@@ -91,24 +85,26 @@ export const fetchPromptLinkOptions = async () => {
   }
 };
 
-// ========================= 추가 =================================
 /**
  * [tRPC] 특정 프롬프트의 모든 버전 정보를 가져옵니다. (상세 페이지용)
+ * @param {string} promptName - 프롬프트 이름
+ * @param {string} projectId - 프로젝트 ID
  */
-export const fetchPromptVersions = async (promptName) => {
+export const fetchPromptVersions = async (promptName, projectId) => { // [수정] projectId를 인자로 받도록 변경
+  if (!projectId) return [];
+
   try {
-    const params = { json: { name: promptName, projectId: PROJECT_ID } };
+    const params = { json: { name: promptName, projectId: projectId } }; // [수정] 인자로 받은 projectId 사용
     const url = `/api/trpc/prompts.allVersions?input=${encodeURIComponent(JSON.stringify(params))}`;
     const response = await axios.get(url);
     const versionsResponse = response.data.result.data.json.promptVersions;
 
-    // API 응답(response.txt)을 기반으로 데이터 가공 로직을 수정합니다.
     return versionsResponse.map((v) => ({
       id: v.version,
       label: v.commitMessage || `Version ${v.version}`,
       labels: v.labels,
       details: v.updatedAt ? new Date(v.updatedAt).toLocaleString() : 'N/A',
-      author: v.creator, // `response.txt`에 따르면 'creator' 필드에 사용자 이름이 있습니다.
+      author: v.creator,
       prompt: Array.isArray(v.prompt) ? {
         user: v.prompt.find(p => p.role === 'user')?.content ?? '',
         system: v.prompt.find(p => p.role === 'system')?.content,
@@ -116,7 +112,6 @@ export const fetchPromptVersions = async (promptName) => {
       config: v.config,
       tags: v.tags,
       commitMessage: v.commitMessage,
-      // useprompts는 API 응답에 없으므로, 필요 시 기본값을 설정합니다.
       useprompts: { python: "# Python code snippet", jsTs: "// JS/TS code snippet" },
     })).sort((a, b) => b.id - a.id);
 
@@ -128,19 +123,26 @@ export const fetchPromptVersions = async (promptName) => {
 
 /**
  * [tRPC] 특정 이름의 프롬프트를 모든 버전을 삭제하여 제거합니다.
+ * @param {string} promptName - 프롬프트 이름
+ * @param {string} projectId - 프로젝트 ID
  */
-export const deletePrompt = async (promptName) => {
+export const deletePrompt = async (promptName, projectId) => { // [수정] projectId를 인자로 받도록 변경
+  if (!projectId) throw new Error("Project ID is required to delete a prompt.");
+
   try {
-    const versions = await getAllPromptVersions(promptName, PROJECT_ID);
+    const versions = await getAllPromptVersions(promptName, projectId); // [수정] projectId 전달
     if (versions.length === 0) {
       console.log(`"${promptName}" 프롬프트에 삭제할 버전이 없습니다.`);
       return;
     }
 
-    // Promise.all을 사용한 동시 삭제 대신, for...of 루프를 사용하여 순차적으로 삭제합니다.
-    for (const version of versions) {
-      await deletePromptVersion(version.id, PROJECT_ID);
-    }
+    // Promise.all을 사용하여 모든 삭제 요청을 동시에 보냅니다. (더 효율적)
+    const deletePromises = versions.map(version =>
+      // [수정] 이제 version.id는 '1', '2'가 아닌 '09bf2cda-...' 와 같은 고유 ID가 됩니다.
+      deletePromptVersion(version.id, projectId)
+    );
+
+    await Promise.all(deletePromises);
 
   } catch (error) {
     // deletePromptVersion 내부에서 이미 에러 로그를 출력하고 있으므로,
@@ -149,16 +151,18 @@ export const deletePrompt = async (promptName) => {
   }
 };
 
-
 const getAllPromptVersions = async (promptName, projectId) => {
   const params = { json: { name: promptName, projectId } };
   const url = `/api/trpc/prompts.allVersions?input=${encodeURIComponent(JSON.stringify(params))}`;
   const response = await axios.get(url);
-  return response.data.result.data.json.promptVersions;
+  // API 응답에 버전의 고유 ID가 'id' 필드에 있다고 가정합니다. (만약 다른 이름이라면 그 이름으로 변경해야 합니다)
+  return response.data?.result?.data?.json?.promptVersions || [];
 };
 
 const deletePromptVersion = async (promptVersionId, projectId) => {
   try {
+    // API 요청 본문(payload)이 서버의 요구사항과 일치하는지 확인합니다.
+    // 보통 'promptVersionId' 또는 'versionId'와 같은 키를 사용합니다.
     await axios.post('/api/trpc/prompts.deleteVersion', {
       json: {
         promptVersionId,
@@ -174,12 +178,17 @@ const deletePromptVersion = async (promptVersionId, projectId) => {
 
 /**
  * [tRPC] 프롬프트의 태그를 업데이트합니다.
+ * @param {string} promptName - 프롬프트 이름
+ * @param {string[]} tags - 업데이트할 태그 배열
+ * @param {string} projectId - 프로젝트 ID
  */
-export const updatePromptTags = async (promptName, tags) => {
+export const updatePromptTags = async (promptName, tags, projectId) => { // [수정] projectId를 인자로 받도록 변경
+  if (!projectId) throw new Error("Project ID is required to update tags.");
+
   try {
     await axios.post('/api/trpc/prompts.updateTags', {
       json: {
-        projectId: PROJECT_ID,
+        projectId: projectId, // [수정] 인자로 받은 projectId 사용
         name: promptName,
         tags,
       },

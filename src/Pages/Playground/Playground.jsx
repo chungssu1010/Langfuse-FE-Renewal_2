@@ -359,7 +359,7 @@ const VariablesPanelContent = ({ names, values, onChangeValue, onReset, placehol
 // ---------- 단일 패널 ----------
 
 
-const PlaygroundComponent = ({ PROJECT_ID, onCopy, onRemove, showRemoveButton }) => {
+const PlaygroundComponent = ({ PROJECT_ID, onCopy, onRemove, showRemoveButton, panelId, onRegisterRunner }) => {
   const [messages, setMessages] = useState([]);
 
   //변수 상태 추가 + 감지 useEffect
@@ -857,7 +857,13 @@ const PlaygroundComponent = ({ PROJECT_ID, onCopy, onRemove, showRemoveButton })
     }
   }
 
-
+  // ▶ Run All을 위해 부모에게 내 submit 핸들 등록/해제
+  useEffect(() => {
+    if (typeof onRegisterRunner === "function") {
+      onRegisterRunner(panelId, handleSubmit);
+      return () => onRegisterRunner(panelId, null); // 언마운트/리렌더 시 해제
+    }
+  }, [panelId, onRegisterRunner, handleSubmit]);
 
   return (
     <div className={styles.panelContainer}>
@@ -1200,7 +1206,43 @@ export default function Playground() {
   };
   const resetPlayground = () => setPanels([Date.now()]);
 
-  //
+  // ▶ 각 패널의 submit 함수를 보관할 레지스트리
+  const runnersRef = useRef(new Map()); // key: panelId, val: async () => void
+  const registerRunner = (id, fn) => {
+    if (typeof fn === "function") runnersRef.current.set(id, fn);
+    else runnersRef.current.delete(id);
+  };
+
+  // ▶ Run All: 열린 패널 순서대로 실행(순차). 병렬 원하면 Promise.allSettled로 교체.
+  const [runningAll, setRunningAll] = useState(false);
+  const runAll = async () => {
+    if (runningAll) return;
+    setRunningAll(true);
+    try {
+      for (const id of panels) {
+        const run = runnersRef.current.get(id);
+        if (typeof run === "function") {
+          await run(); // 필요하면 await run(true) 처럼 스트리밍 플래그 전달 가능
+        }
+      }
+    } finally {
+      setRunningAll(false);
+    }
+  };
+
+  // ▶ 단축키: Ctrl+Enter 로 Run All
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.ctrlKey && e.key === "Enter") {
+        e.preventDefault();
+        runAll();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panels, runningAll]); // panels 바뀌면 최신 순서 반영
+
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -1244,8 +1286,8 @@ export default function Playground() {
         <button className={styles.actionBtn} onClick={addPanel}>
           <Plus size={16} /> Add Panel
         </button>
-        <button className={styles.actionBtn} onClick={() => { /* TODO: Run All 연결 */ }}>
-          <Play size={16} /> Run All (Ctrl + Enter)
+        <button className={styles.actionBtn} onClick={runAll} disabled={runningAll} title="Ctrl + Enter">
+          <Play size={16} /> {runningAll ? "Running..." : "Run All (Ctrl + Enter)"}
         </button>
         <button className={styles.actionBtn} onClick={resetPlayground}>
           <RotateCcw size={16} /> Reset playground
@@ -1260,6 +1302,8 @@ export default function Playground() {
             onCopy={addPanel}
             onRemove={() => removePanel(id)}
             showRemoveButton={panels.length > 1}
+            panelId={id}
+            onRegisterRunner={registerRunner}
           />
         ))}
       </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import styles from './PromptsDetail.module.css';
 import SearchInput from '../../components/SearchInput/SearchInput.jsx';
+import useProjectId from '../../hooks/useProjectId';
 import {
   Book,
   Clipboard,
@@ -21,10 +22,15 @@ import DuplicatePromptModal from './DuplicatePromptModal.jsx';
 import { fetchPromptVersions } from './PromptsDetailApi.js';
 import NewExperimentModal from './NewExperimentModal'; // NewExperimentModal import
 
+/**
+ * [tRPC] 프롬프트 목록 전체를 가져옵니다.
+ * @param {string} projectId - 프로젝트 ID를 인자로 받습니다.
+ */
 // --- 메인 컴포넌트 ---
 export default function PromptsDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { projectId } = useProjectId();
 
   const [versions, setVersions] = useState([]);
   const [selectedVersion, setSelectedVersion] = useState(null);
@@ -105,6 +111,8 @@ export default function PromptsDetail() {
 
     navigate(`/prompts/new`, {
       state: {
+        // 이제 상단에서 선언한 projectId 변수를 여기서 정상적으로 사용할 수 있습니다.
+        projectId: projectId, // <-- 2. 'projectid'를 'projectId' (camelCase)로 수정
         promptName: id,
         promptType: selectedVersion.prompt.system ? 'Chat' : 'Text',
         chatContent: selectedVersion.prompt.system
@@ -120,6 +128,7 @@ export default function PromptsDetail() {
       },
     });
   };
+
 
   const handleGoToPlayground = () => {
     if (!selectedVersion) return;

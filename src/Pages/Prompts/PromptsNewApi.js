@@ -1,32 +1,36 @@
+// PromptsNewApi.js
 import axios from 'axios';
 
-const PROJECT_ID = "cmetj3c160006qp07r33bizpj"
 /**
  * [tRPC] 새로운 프롬프트를 생성하거나 새 버전을 만듭니다.
+ * @param {object} params - 프롬프트 생성에 필요한 파라미터 객체
+ * @param {string} projectId - API를 호출할 프로젝트의 ID
  */
-export const createPromptOrVersion = async (params) => {
+export const createPromptOrVersion = async (params, projectId) => { // [수정] projectId를 두 번째 인자로 받도록 변경
+  // [수정] projectId가 없으면 에러를 발생시켜 API 호출을 막습니다.
+  if (!projectId) {
+    throw new Error("Project ID is missing. Cannot create prompt.");
+  }
+
   const {
     promptName,
     promptType,
     chatContent,
     textContent,
     config,
-    labels, // { production: true/false } 형태의 객체
+    labels,
     commitMessage,
   } = params;
 
-  // 1. 활성화된 라벨만 문자열 배열로 변환합니다. (e.g., ["production"] 또는 [])
   const activeLabels = Object.entries(labels)
     .filter(([, isActive]) => isActive)
     .map(([label]) => label);
 
-  // 2. API가 요구하는 payload 형식에 맞게 데이터를 구성합니다.
   const payload = {
     json: {
-      projectId: PROJECT_ID, // ⚠️ 이 부분은 나중에 동적으로 가져와야 합니다.
+      projectId: projectId, // [수정] 인자로 전달받은 projectId를 사용
       name: promptName,
-      type: promptType.toLowerCase(), // 'Chat' -> 'chat'
-      // Chat 타입일 경우와 Text 타입일 경우를 구분하여 prompt 데이터 구성
+      type: promptType.toLowerCase(),
       prompt: promptType === 'Text'
         ? textContent
         : chatContent
@@ -34,7 +38,6 @@ export const createPromptOrVersion = async (params) => {
             .map(({ role, content }) => ({ role: role.toLowerCase(), content: content || '' })),
       config: JSON.parse(config),
       labels: activeLabels,
-      // commitMessage가 비어있으면 '' 대신 null을 보내 데이터 불일치 문제를 해결합니다.
       commitMessage: commitMessage ? commitMessage : null,
     },
     meta: {
@@ -44,12 +47,12 @@ export const createPromptOrVersion = async (params) => {
     }
   };
 
-  // 3. 안정적인 tRPC API를 직접 호출합니다.
   try {
-    // prompts.create API를 사용하여 새 프롬프트 또는 버전을 생성합니다.
     await axios.post('/api/trpc/prompts.create', payload);
   } catch (error) {
     console.error("Failed to create prompt via tRPC:", error);
-    throw new Error(error.response?.data?.error?.message || "Failed to create prompt.");
+    // [수정] 에러 메시지를 좀 더 구체적으로 전달합니다.
+    const errorMessage = error.response?.data?.error?.message || "An unknown error occurred while creating the prompt.";
+    throw new Error(errorMessage);
   }
 };

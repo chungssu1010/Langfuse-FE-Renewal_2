@@ -9,17 +9,16 @@ import LineNumberedTextarea from '../../components/LineNumberedTextarea/LineNumb
 import FormPageLayout from '../../components/Layouts/FormPageLayout.jsx';
 import FormGroup from '../../components/Form/FormGroup.jsx';
 import { createPromptOrVersion } from './PromptsNewApi.js';
+import useProjectId from 'hooks/useProjectId'; // [추가] useProjectId 훅을 import 합니다.
 
-// LineNumberedTextarea needs to be wrapped with forwardRef to accept a ref.
-// Make sure this change is applied in the actual component file.
 const ForwardedLineNumberedTextarea = React.forwardRef((props, ref) => (
     <LineNumberedTextarea {...props} forwardedRef={ref} />
 ));
 
-
 const PromptsNew = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { projectId } = useProjectId();
 
     const initialState = location.state || {};
     const [promptName, setPromptName] = useState(initialState.promptName || '');
@@ -77,26 +76,32 @@ const PromptsNew = () => {
 
 
     const handleSave = async () => {
+        if (!projectId) {
+            alert("Project is not selected. Please select a project first.");
+            return;
+        }
+
         try {
-            await createPromptOrVersion({
-                promptName,
-                promptType,
-                chatContent,
-                textContent,
-                config,
-                labels,
-                commitMessage,
-            });
+            // [수정] createPromptOrVersion 호출 시, 파라미터 객체와 projectId를 함께 전달합니다.
+            await createPromptOrVersion(
+                {
+                    promptName,
+                    promptType,
+                    chatContent,
+                    textContent,
+                    config,
+                    labels,
+                    commitMessage,
+                },
+                projectId
+            );
 
             alert(`'${promptName}' prompt's new version has been saved successfully.`);
             navigate(`/prompts/${promptName}`);
         } catch (err) {
             console.error("Failed to save prompt:", err);
-            if (err.response) {
-                alert(`Failed to save prompt: ${err.response?.data?.message || err.message}`);
-            } else {
-                alert(`Failed to save prompt: ${String(err)}`);
-            }
+            // [수정] API에서 반환된 에러 메시지를 직접 사용합니다.
+            alert(`Failed to save prompt: ${err.message}`);
         }
     };
 

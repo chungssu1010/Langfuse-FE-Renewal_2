@@ -20,12 +20,12 @@ import SearchInput from '../../components/SearchInput/SearchInput.jsx';
 import { useSearch } from '../../hooks/useSearch.js';
 
 //--- TagEditor 컴포넌트를 Prompts.jsx 파일 내부에 직접 정의 ---
-const TagEditor = ({ promptName, tags, onSave, onClose, anchorEl, projectId }) => { // promptName과 projectId 추가
+const TagEditor = ({ promptName, tags, onSave, onClose, anchorEl, projectId }) => {
   const [currentTags, setCurrentTags] = useState(tags || []);
   const [inputValue, setInputValue] = useState('');
   const popoverRef = useRef(null);
-
   const [position, setPosition] = useState({ top: 0, left: 0 });
+
   useEffect(() => {
     if (anchorEl) {
       const rect = anchorEl.getBoundingClientRect();
@@ -47,11 +47,11 @@ const TagEditor = ({ promptName, tags, onSave, onClose, anchorEl, projectId }) =
   }, [onClose, anchorEl]);
 
 
-  // 태그 저장 로직을 useCallback으로 래핑하여 불필요한 재생성 방지 및 의존성 명확화
   const saveTagsToApi = useCallback(async (tagsToSave) => {
     try {
+      // [수정] updatePromptTags 호출 시 projectId를 전달합니다. (이미 props로 받고 있음)
       await updatePromptTags(promptName, tagsToSave, projectId);
-      onSave(tagsToSave); // 부모 컴포넌트의 상태 업데이트
+      onSave(tagsToSave);
     } catch (error) {
       alert(`Failed to save tags: ${error.message}`);
       console.error(error);
@@ -59,7 +59,7 @@ const TagEditor = ({ promptName, tags, onSave, onClose, anchorEl, projectId }) =
   }, [promptName, projectId, onSave]);
 
 
-  const handleKeyDown = async (e) => { // async 추가
+  const handleKeyDown = async (e) => {
     if (e.key === 'Enter' && inputValue.trim()) {
       e.preventDefault();
       const newTag = inputValue.trim();
@@ -67,29 +67,23 @@ const TagEditor = ({ promptName, tags, onSave, onClose, anchorEl, projectId }) =
         const updatedTags = [...currentTags, newTag];
         setCurrentTags(updatedTags);
         setInputValue('');
-        await saveTagsToApi(updatedTags); // Enter 시 자동 저장
+        await saveTagsToApi(updatedTags);
       } else {
-        setInputValue(''); // 이미 있는 태그면 입력값만 초기화
+        setInputValue('');
       }
     } else if (e.key === 'Backspace' && inputValue === '' && currentTags.length > 0) {
       e.preventDefault();
-      const updatedTags = currentTags.slice(0, -1); // 마지막 태그 제거
+      const updatedTags = currentTags.slice(0, -1);
       setCurrentTags(updatedTags);
-      await saveTagsToApi(updatedTags); // 백스페이스로 태그 제거 시 자동 저장
+      await saveTagsToApi(updatedTags);
     }
   };
 
-  const removeTag = async (tagToRemove) => { // async 추가
+  const removeTag = async (tagToRemove) => {
     const updatedTags = currentTags.filter(tag => tag !== tagToRemove);
     setCurrentTags(updatedTags);
-    await saveTagsToApi(updatedTags); // 태그 클릭하여 제거 시 자동 저장
+    await saveTagsToApi(updatedTags);
   };
-
-  // Save 버튼 제거
-  // const handleSave = () => {
-  //   onSave(currentTags);
-  //   onClose();
-  // };
 
   if (!anchorEl) return null;
 
@@ -131,21 +125,27 @@ const Prompts = () => {
   const [promptToDelete, setPromptToDelete] = useState(null);
   const [editingPrompt, setEditingPrompt] = useState(null);
   const [tagEditorAnchor, setTagEditorAnchor] = useState(null);
-  
+
   const [searchType, setSearchType] = useState('Names, Tags');
   const { searchQuery, setSearchQuery, filteredData: filteredPrompts } = useSearch(prompts, searchType);
 
-  // 현재 프로젝트 ID (⚠️ 개선 필요)
-  // const currentProjectId = useProjectId();
-   const currentProjectId = "cmetj3c160006qp07r33bizpj"; 
+  // [수정] useProjectId 훅에서 projectId 값을 구조분해 할당으로 가져옵니다.
+  const { projectId } = useProjectId();
 
   useEffect(() => {
+    // [수정] projectId가 아직 로드되지 않았다면 API 호출을 시도하지 않습니다.
+    if (!projectId) {
+      setIsLoading(false);
+      return;
+    }
+
     const loadPrompts = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        
-        const formattedPrompts = await fetchPrompts();
+
+        // [수정] fetchPrompts 호출 시 현재 projectId를 인자로 전달합니다.
+        const formattedPrompts = await fetchPrompts(projectId);
         setPrompts(formattedPrompts);
       } catch (err) {
         console.error("Failed to fetch prompts:", err);
@@ -154,9 +154,9 @@ const Prompts = () => {
         setIsLoading(false);
       }
     };
-    
+
     loadPrompts();
-  }, []); // 의존성 배열 비움
+  }, [projectId]); // [수정] projectId가 변경될 때마다 프롬프트 목록을 다시 불러오도록 의존성 배열에 추가합니다.
 
   const navigateToNewPrompts = () => {
     navigate("/prompts/new");
@@ -172,30 +172,31 @@ const Prompts = () => {
   const handleDeleteClick = (prompt) => {
     setPromptToDelete(prev => (prev?.id === prompt.id ? null : prompt));
   };
-  
+
   const handleTagClick = (e, prompt) => {
     e.stopPropagation();
     if (editingPrompt && editingPrompt.id === prompt.id) {
-        setEditingPrompt(null);
-        setTagEditorAnchor(null);
+      setEditingPrompt(null);
+      setTagEditorAnchor(null);
     } else {
-        setTagEditorAnchor(e.currentTarget);
-        setEditingPrompt(prompt);
+      setTagEditorAnchor(e.currentTarget);
+      setEditingPrompt(prompt);
     }
   };
 
-  const handleSaveTags = (newTags) => { // async 제거, API 호출은 TagEditor 내부에서 처리
+  const handleSaveTags = (newTags) => {
     if (!editingPrompt) return;
-      setPrompts(prompts.map(p =>
-        p.id === editingPrompt.id ? { ...p, tags: newTags } : p
-      ));
+    setPrompts(prompts.map(p =>
+      p.id === editingPrompt.id ? { ...p, tags: newTags } : p
+    ));
   };
 
   const confirmDelete = async () => {
     if (!promptToDelete) return;
-    
+
     try {
-      await deletePrompt(promptToDelete.name);
+      // [수정] deletePrompt 호출 시 prompt 이름과 현재 projectId를 함께 전달합니다.
+      await deletePrompt(promptToDelete.name, projectId);
       setPrompts(currentPrompts => currentPrompts.filter(p => p.id !== promptToDelete.id));
       console.log(`프롬프트 "${promptToDelete.name}"가 성공적으로 삭제되었습니다.`);
       setPromptToDelete(null);
@@ -267,15 +268,15 @@ const Prompts = () => {
                     <td>
                       <div className={styles.tagsCell}>
                         <button className={styles.iconButton} onClick={(e) => handleTagClick(e, prompt)}>
-                            {prompt.tags && prompt.tags.length > 0 ? (
+                          {prompt.tags && prompt.tags.length > 0 ? (
                             prompt.tags.map(tag => (
-                                <span key={tag} className={styles.tagPill}>
+                              <span key={tag} className={styles.tagPill}>
                                 {tag}
-                                </span>
+                              </span>
                             ))
-                            ) : (
+                          ) : (
                             <Tag size={16} />
-                            )}
+                          )}
                         </button>
                       </div>
                     </td>
@@ -332,7 +333,7 @@ const Prompts = () => {
       {/* TagEditor 렌더링 로직 */}
       {editingPrompt && (
         <TagEditor
-          promptName={editingPrompt.name} // promptName prop 추가
+          promptName={editingPrompt.name}
           tags={editingPrompt.tags}
           onSave={handleSaveTags}
           onClose={() => {
@@ -340,7 +341,7 @@ const Prompts = () => {
             setTagEditorAnchor(null);
           }}
           anchorEl={tagEditorAnchor}
-          projectId={currentProjectId} // projectId prop 추가
+          projectId={projectId}
         />
       )}
     </div>
