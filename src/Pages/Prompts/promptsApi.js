@@ -107,15 +107,13 @@ export const fetchPromptVersions = async (promptName, projectId) => { // [수정
       labels: v.labels,
       details: v.updatedAt ? new Date(v.updatedAt).toLocaleString() : 'N/A',
       author: v.creator,
-      prompt: Array.isArray(v.prompt) ? {
-        user: v.prompt.find(p => p.role === 'user')?.content ?? '',
-        system: v.prompt.find(p => p.role === 'system')?.content,
-      } : { user: v.prompt },
+      prompt: v.prompt,
       config: v.config,
       tags: v.tags,
       commitMessage: v.commitMessage,
       useprompts: { python: "# Python code snippet", jsTs: "// JS/TS code snippet" },
     })).sort((a, b) => b.id - a.id);
+
 
   } catch (error) {
     console.error(`Failed to fetch versions for prompt ${promptName}:`, error);

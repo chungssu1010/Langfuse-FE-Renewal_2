@@ -1,9 +1,6 @@
-// PromptsDetail.jsx
-//수정 코드
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import styles from './PromptsDetail.module.css';
-import SearchInput from '../../components/SearchInput/SearchInput.jsx';
 import useProjectId from '../../hooks/useProjectId';
 import {
   Book,
@@ -20,14 +17,9 @@ import {
 } from 'lucide-react';
 import DuplicatePromptModal from './DuplicatePromptModal.jsx';
 import { duplicatePrompt } from './DuplicatePromptModalApi.js';
-import { fetchPromptVersions } from './PromptsDetailApi.js';
-import NewExperimentModal from './NewExperimentModal'; // NewExperimentModal import
+import { fetchPromptVersions } from './promptsApi.js'; // API 경로 수정
+import NewExperimentModal from './NewExperimentModal';
 
-/**
- * [tRPC] 프롬프트 목록 전체를 가져옵니다.
- * @param {string} projectId - 프로젝트 ID를 인자로 받습니다.
- */
-// --- 메인 컴포넌트 ---
 export default function PromptsDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -42,38 +34,29 @@ export default function PromptsDetail() {
   const [isDuplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [isPlaygroundMenuOpen, setPlaygroundMenuOpen] = useState(false);
   const playgroundMenuRef = useRef(null);
-
   const [searchQuery, setSearchQuery] = useState('');
-  // Experiment 모달의 열림/닫힘 상태를 관리
   const [isExperimentModalOpen, setExperimentModalOpen] = useState(false);
 
+  // 검색 로직
   const filteredVersions = useMemo(() => {
-    const searchId = parseInt(searchQuery);
-
-    if (searchQuery && !isNaN(searchId)) {
+    const searchId = parseInt(searchQuery, 10);
+    if (!isNaN(searchId)) {
       return versions.filter(version => version.id === searchId);
     }
-
     if (!searchQuery) {
       return versions;
     }
-
     const query = searchQuery.toLowerCase();
-    // 아래 switch 문을 제거하고 이 로직만 남겨야 합니다.
-    return versions.filter(version => {
-      return (
-        version.labels.some(label => label.toLowerCase().includes(query)) ||
-        version.tags.some(tag => tag.toLowerCase().includes(query)) ||
-        version.details.toLowerCase().includes(query) ||
-        version.author.toLowerCase().includes(query)
-      );
-    });
+    return versions.filter(version =>
+      version.label.toLowerCase().includes(query) ||
+      (version.author && version.author.toLowerCase().includes(query)) ||
+      version.labels.some(label => label.toLowerCase().includes(query))
+    );
   }, [versions, searchQuery]);
 
-
-
+  // 데이터 로드
   const loadPromptData = useCallback(async () => {
-    if (!id) return;
+    if (!id || !projectId) return;
     setIsLoading(true);
     setError(null);
     try {
@@ -81,6 +64,8 @@ export default function PromptsDetail() {
       setVersions(fetchedVersions);
       if (fetchedVersions.length > 0) {
         setSelectedVersion(fetchedVersions[0]);
+      } else {
+        setError("해당 프롬프트의 버전을 찾을 수 없습니다.");
       }
     } catch (err) {
       console.error("Failed to fetch prompt details:", err);
@@ -94,6 +79,7 @@ export default function PromptsDetail() {
     loadPromptData();
   }, [loadPromptData]);
 
+  // 외부 클릭 감지
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (playgroundMenuRef.current && !playgroundMenuRef.current.contains(event.target)) {
@@ -101,45 +87,29 @@ export default function PromptsDetail() {
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleNewVersion = () => {
     if (!id || !selectedVersion) return;
-
+    const isChat = Array.isArray(selectedVersion.prompt);
     navigate(`/prompts/new`, {
       state: {
-        // 이제 상단에서 선언한 projectId 변수를 여기서 정상적으로 사용할 수 있습니다.
-        projectId: projectId, // <-- 2. 'projectid'를 'projectId' (camelCase)로 수정
+        projectId: projectId,
         promptName: id,
-        promptType: selectedVersion.prompt.system ? 'Chat' : 'Text',
-        chatContent: selectedVersion.prompt.system
-          ? [
-            { id: 1, role: 'System', content: selectedVersion.prompt.system },
-            { id: 2, role: 'User', content: selectedVersion.prompt.user },
-          ]
-          : [{ id: 1, role: 'System', content: 'You are a helpful assistant.' }],
-        textContent: selectedVersion.prompt.system ? '' : selectedVersion.prompt.user,
+        promptType: isChat ? 'Chat' : 'Text',
+        chatContent: isChat ? selectedVersion.prompt : [],
+        textContent: isChat ? '' : selectedVersion.prompt,
         config: JSON.stringify(selectedVersion.config, null, 2),
         isNewVersion: true,
-        version: selectedVersion.id
       },
     });
   };
 
-
   const handleGoToPlayground = () => {
     if (!selectedVersion) return;
-
-    const messages = [];
-    if (selectedVersion.prompt.system) {
-      messages.push({ id: Date.now() + 1, role: 'System', content: selectedVersion.prompt.system });
-    }
-    if (selectedVersion.prompt.user) {
-      messages.push({ id: Date.now() + 2, role: 'User', content: selectedVersion.prompt.user });
-    }
+    const isChat = Array.isArray(selectedVersion.prompt);
+    const messages = isChat ? selectedVersion.prompt.map((p, i) => ({...p, id: Date.now() + i})) : [];
 
     navigate('/playground', {
       state: {
@@ -151,64 +121,57 @@ export default function PromptsDetail() {
     });
   };
 
+  // 이전/다음 프롬프트 네비게이션
   const { currentPromptIndex, handlePrev, handleNext } = useMemo(() => {
     const currentIndex = id ? allPromptNames.findIndex(name => name === id) : -1;
-
     const prev = () => {
-      if (currentIndex > 0) {
-        navigate(`/prompts/${allPromptNames[currentIndex - 1]}`);
-      }
+      if (currentIndex > 0) navigate(`/prompts/${allPromptNames[currentIndex - 1]}`);
     };
-
     const next = () => {
       if (currentIndex !== -1 && currentIndex < allPromptNames.length - 1) {
         navigate(`/prompts/${allPromptNames[currentIndex + 1]}`);
       }
     };
-
     return { currentPromptIndex: currentIndex, handlePrev: prev, handleNext: next };
   }, [id, allPromptNames, navigate]);
 
+  // 변수 추출
   const variables = useMemo(() => {
     if (!selectedVersion) return [];
     const content = selectedVersion.prompt;
-    const textToScan = `${content.system || ''} ${content.user || ''}`;
+    const textToScan = Array.isArray(content)
+      ? content.map(c => c.content).join(' ')
+      : content;
     const regex = /{{\s*([\w\d_]+)\s*}}/g;
     const matches = textToScan.match(regex) || [];
     const uniqueVars = new Set(matches.map(v => v.replace(/[{}]/g, '').trim()));
     return Array.from(uniqueVars);
   }, [selectedVersion]);
 
+  // 프롬프트 복제
   const handleDuplicateSubmit = async (newName, copyAll) => {
-    if (!selectedVersion?.promptId) {
-      alert("복사할 버전의 ID를 찾을 수 없습니다. 페이지를 새로고침하고 다시 시도해주세요.");
-      return;
+    if (!selectedVersion?.promptDbId) { // promptId -> promptDbId
+        alert("복사할 버전의 ID를 찾을 수 없습니다.");
+        return;
     }
-
     try {
-      const newPrompt = await duplicatePrompt(
-        selectedVersion.promptId, // 고유 DB ID 전달
-        newName,
-        copyAll,
-        projectId
-      );
-      alert(`프롬프트가 "${newName}"으로 복제되었습니다.`);
-      setDuplicateModalOpen(false);
-      if (newPrompt && newPrompt.name) {
-        navigate(`/prompts/${newPrompt.name}`);
-      }
+        const newPrompt = await duplicatePrompt(selectedVersion.promptDbId, newName, copyAll, projectId);
+        alert(`프롬프트가 "${newName}"으로 복제되었습니다.`);
+        setDuplicateModalOpen(false);
+        if (newPrompt && newPrompt.name) {
+            navigate(`/prompts/${newPrompt.name}`);
+            // 페이지 이동 후 새로고침하여 전체 프롬프트 목록을 갱신합니다.
+            window.location.reload();
+        }
     } catch (error) {
-      console.error("프롬프트 복제 실패:", error);
-      alert(`프롬프트 복제 중 오류 발생: ${error.message}`);
+        alert(`프롬프트 복제 중 오류 발생: ${error.message}`);
     }
-  };
+};
 
-  // Experiment 모달에서 'Create' 버튼을 눌렀을 때 실행될 함수
   const handleRunExperiment = () => {
-    console.log("Create Experiment button clicked. Form data is in the modal.");
-    alert('실험 생성 요청이 콘솔에 기록되었습니다.');
     setExperimentModalOpen(false);
   };
+
 
   if (isLoading) {
     return <div className={styles.container}><div className={styles.placeholder}>프롬프트를 불러오는 중...</div></div>;
@@ -234,11 +197,9 @@ export default function PromptsDetail() {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.breadcrumbs}>
-          <h1 className={styles.promptNameH1}>
-            {id}
-          </h1>
+          <h1 className={styles.promptNameH1}>{id}</h1>
           <div className={styles.versionDropdown}>
-            {selectedVersion.tags.map(tag => (
+            {selectedVersion.tags?.map(tag => (
               <span key={tag} className={styles.tagItem}><Tag size={12} /> {tag}</span>
             ))}
           </div>
@@ -261,6 +222,7 @@ export default function PromptsDetail() {
       <div className={styles.tabs}>
         <button className={`${styles.tabButton} ${styles.active}`}>Versions</button>
       </div>
+
       <div className={styles.mainGrid}>
         <div className={styles.leftPanel}>
           <div className={styles.versionToolbar}>
@@ -268,7 +230,7 @@ export default function PromptsDetail() {
               <Search size={14} className={styles.searchIcon} />
               <input
                 type="text"
-                placeholder="Search versions"
+                placeholder="Search versions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -285,18 +247,21 @@ export default function PromptsDetail() {
                 onClick={() => setSelectedVersion(version)}
               >
                 <div className={styles.versionTitle}>
-                  <span className={styles.versionLabel}>#{version.id}</span>
-                </div>
-                <div className={styles.tagsContainer}>
+                  <span className={styles.versionName}>Version {version.id}</span>
                   {version.labels.map(label => (
                     <span key={label} className={label.toLowerCase() === 'production' ? styles.statusTagProd : styles.statusTagLatest}>
                       <GitCommitHorizontal size={12} />{label}
                     </span>
                   ))}
                 </div>
+                <div className={styles.tagsContainer}>
+                    {version.tags?.map(tag => (
+                        <span key={tag} className={styles.tagItem}>{tag}</span>
+                    ))}
+                </div>
                 <div className={styles.versionMeta}>
-                  <p>{version.details}</p>
-                  <p>by {version.author}</p>
+                  <span>{version.details}</span>
+                  <span>by {version.author}</span>
                 </div>
               </li>
             ))}
@@ -319,24 +284,14 @@ export default function PromptsDetail() {
                 >
                   <Play size={14} /> Playground
                 </button>
-
                 {isPlaygroundMenuOpen && (
                   <div className={styles.playgroundDropdownMenu}>
-                    <div className={styles.playgroundDropdownItem} onClick={handleGoToPlayground}>
-                      Fresh playground
-                    </div>
-                    <div className={styles.playgroundDropdownItem} onClick={() => alert('Add to existing 기능은 아직 구현되지 않았습니다.')}>
-                      Add to existing
-                    </div>
+                    <div className={styles.playgroundDropdownItem} onClick={handleGoToPlayground}>Fresh playground</div>
+                    <div className={styles.playgroundDropdownItem} onClick={() => alert('Not implemented')}>Add to existing</div>
                   </div>
                 )}
               </div>
-              <button
-                className={styles.playgroundButton}
-                onClick={() => setExperimentModalOpen(true)}
-              >
-                Dataset run
-              </button>
+              <button className={styles.playgroundButton} onClick={() => setExperimentModalOpen(true)}>Dataset run</button>
               <button className={styles.iconButton}><MessageCircle size={16} /></button>
               <button className={styles.iconButton}><MoreVertical size={18} /></button>
             </div>
@@ -344,26 +299,30 @@ export default function PromptsDetail() {
 
           <div className={styles.promptArea}>
             {activeDetailTab === 'Prompt' && (
-              <>
-                {selectedVersion.prompt.system && (
-                  <div className={styles.promptCard}>
-                    <div className={styles.promptHeader}>System Prompt</div>
-                    <div className={styles.promptBody}><pre>{selectedVersion.prompt.system}</pre></div>
+              Array.isArray(selectedVersion.prompt) ? (
+                // Chat 타입 프롬프트 렌더링
+                selectedVersion.prompt.map((message, index) => (
+                  <div key={index} className={styles.promptCard}>
+                    <div className={styles.promptHeader}>
+                      {message.role.toLowerCase() === 'placeholder' 
+                        ? `Placeholder: ${message.content || 'untitled'}`
+                        : `${message.role.charAt(0).toUpperCase() + message.role.slice(1)} Prompt`
+                      }
+                    </div>
+                    {message.role.toLowerCase() !== 'placeholder' && (
+                      <div className={styles.promptBody}>
+                        <pre>{message.content}</pre>
+                      </div>
+                    )}
                   </div>
-                )}
+                ))
+              ) : (
+                // Text 타입 프롬프트 렌더링
                 <div className={styles.promptCard}>
                   <div className={styles.promptHeader}>Text Prompt</div>
-                  <div className={styles.promptBody}><pre>{selectedVersion.prompt.user}</pre></div>
+                  <div className={styles.promptBody}><pre>{selectedVersion.prompt}</pre></div>
                 </div>
-                {variables.length > 0 && (
-                  <div className={styles.variablesInfo}>
-                    The following variables are available:
-                    <div className={styles.variablesContainer}>
-                      {variables.map(v => <span key={v} className={styles.variableTag}>{v}</span>)}
-                    </div>
-                  </div>
-                )}
-              </>
+              )
             )}
 
             {activeDetailTab === 'Config' && (
@@ -377,19 +336,29 @@ export default function PromptsDetail() {
               <>
                 <div className={styles.promptCard}>
                   <div className={styles.promptHeader}>Python</div>
-                  <div className={styles.promptBody}><pre>{selectedVersion.useprompts.python}</pre></div>
+                  <div className={styles.promptBody}><pre>{selectedVersion.useprompts?.python}</pre></div>
                 </div>
                 <div className={styles.promptCard}>
                   <div className={styles.promptHeader}>JS/TS</div>
-                  <div className={styles.promptBody}><pre>{selectedVersion.useprompts.jsTs}</pre></div>
+                  <div className={styles.promptBody}><pre>{selectedVersion.useprompts?.jsTs}</pre></div>
                 </div>
               </>
             )}
 
             {activeDetailTab === 'Generations' && <div className={styles.placeholder}>No generations linked yet.</div>}
+
+            {variables.length > 0 && activeDetailTab === 'Prompt' && (
+              <div className={styles.variablesInfo}>
+                The following variables are available:
+                <div className={styles.variablesContainer}>
+                  {variables.map(v => <span key={v} className={styles.variableTag}>{v}</span>)}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
       {isDuplicateModalOpen && (
         <DuplicatePromptModal
           isOpen={isDuplicateModalOpen}
@@ -399,6 +368,7 @@ export default function PromptsDetail() {
           currentVersion={selectedVersion?.id || 0}
         />
       )}
+
       {isExperimentModalOpen && (
         <NewExperimentModal
           isOpen={isExperimentModalOpen}
@@ -411,5 +381,3 @@ export default function PromptsDetail() {
     </div>
   );
 }
-
-
