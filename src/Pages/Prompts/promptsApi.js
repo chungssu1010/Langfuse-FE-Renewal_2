@@ -136,17 +136,12 @@ export const deletePrompt = async (promptName, projectId) => { // [수정] proje
       return;
     }
 
-    // Promise.all을 사용하여 모든 삭제 요청을 동시에 보냅니다. (더 효율적)
-    const deletePromises = versions.map(version =>
-      // [수정] 이제 version.id는 '1', '2'가 아닌 '09bf2cda-...' 와 같은 고유 ID가 됩니다.
-      deletePromptVersion(version.id, projectId)
-    );
-
-    await Promise.all(deletePromises);
+    for (const version of versions) {
+      // deletePromptVersion이 완료될 때까지 기다린 후, 다음 버전 삭제를 진행합니다.
+      await deletePromptVersion(version.id, projectId);
+    }
 
   } catch (error) {
-    // deletePromptVersion 내부에서 이미 에러 로그를 출력하고 있으므로,
-    // 여기서는 에러를 다시 던져 UI 레이어에서 처리할 수 있도록 합니다.
     throw error;
   }
 };

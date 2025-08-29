@@ -152,8 +152,20 @@ const PromptsNew = () => {
             >
                 <div className={styles.promptHeader}>
                     <div className={styles.typeSelector}>
-                        <button className={`${styles.typeButton} ${promptType === 'Chat' ? styles.active : ''}`} onClick={() => setPromptType('Chat')}>Chat</button>
-                        <button className={`${styles.typeButton} ${promptType === 'Text' ? styles.active : ''}`} onClick={() => setPromptType('Text')}>Text</button>
+                        <button
+                            className={`${styles.typeButton} ${promptType === 'Chat' ? styles.active : ''}`}
+                            onClick={() => setPromptType('Chat')}
+                            disabled={isNewVersionMode}
+                        >
+                            Chat
+                        </button>
+                        <button
+                            className={`${styles.typeButton} ${promptType === 'Text' ? styles.active : ''}`}
+                            onClick={() => setPromptType('Text')}
+                            disabled={isNewVersionMode}
+                        >
+                            Text
+                        </button>
                     </div>
                     {/* This button was misplaced in the original code. It should be outside the textarea. */}
                     <button className={styles.addReferenceButton} onClick={() => setIsReferenceModalOpen(true)}>

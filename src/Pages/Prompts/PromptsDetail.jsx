@@ -77,7 +77,7 @@ export default function PromptsDetail() {
     setIsLoading(true);
     setError(null);
     try {
-      const fetchedVersions = await fetchPromptVersions(id);
+      const fetchedVersions = await fetchPromptVersions(id, projectId);
       setVersions(fetchedVersions);
       if (fetchedVersions.length > 0) {
         setSelectedVersion(fetchedVersions[0]);
